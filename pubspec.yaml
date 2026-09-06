@@ -1,0 +1,133 @@
+name: saia_skills
+description: Skill catalog for SAIA agents. Bilingual markdown skills with a read API and no inference engine attached.
+version: 0.1.1
+homepage: https://github.com/Open-Neom/saia_skills
+repository: https://github.com/Open-Neom/saia_skills
+issue_tracker: https://github.com/Open-Neom/saia_skills/issues
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+# Paquete de contenido declarativo para agentes SAIA: sin dependencias pesadas de inferencia.
+# Consumible por cualquier aplicación o agente Flutter de forma liviana y desacoplada.
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  assets:
+    - assets/
+    - assets/adaptability/
+    - assets/agency/
+    - assets/agents/
+    - assets/ai_ml/
+    - assets/api_design/
+    - assets/architecture/
+    - assets/backend/
+    - assets/business/
+    - assets/chain_of_thought/
+    - assets/code_quality/
+    - assets/cognitive_pipeline/
+    - assets/coherence/
+    - assets/consolidation/
+    - assets/content_writing/
+    - assets/context/
+    - assets/cotizaciones/
+    - assets/dart_flutter/
+    - assets/data_storage/
+    - assets/debugging/
+    - assets/design_ui/
+    - assets/distillation/
+    - assets/documentation/
+    - assets/documentos/
+    - assets/documents/
+    - assets/evaluation/
+    - assets/finance/
+    - assets/finanzas/
+    - assets/flutter/
+    - assets/frontend/
+    - assets/git_workflow/
+    - assets/internationalization/
+    - assets/introspection/
+    - assets/kpis/
+    - assets/languages/
+    - assets/legal/
+    - assets/marketing/
+    - assets/memory/
+    - assets/metacognition/
+    - assets/performance/
+    - assets/personality/
+    - assets/planning/
+    - assets/product/
+    - assets/prompting/
+    - assets/recursos_humanos/
+    - assets/redaccion/
+    - assets/research/
+    - assets/security/
+    - assets/testing/
+    - assets/token_efficiency/
+    - assets/tools/
+    - assets/tramites/
+    - assets/ventas/
+    - assets/workflow/
+    - assets/writing_quality/
+    - assets/en/adaptability/
+    - assets/en/agency/
+    - assets/en/agents/
+    - assets/en/ai_ml/
+    - assets/en/api_design/
+    - assets/en/architecture/
+    - assets/en/backend/
+    - assets/en/business/
+    - assets/en/chain_of_thought/
+    - assets/en/code_quality/
+    - assets/en/cognitive_pipeline/
+    - assets/en/coherence/
+    - assets/en/consolidation/
+    - assets/en/content_writing/
+    - assets/en/context/
+    - assets/en/cotizaciones/
+    - assets/en/dart_flutter/
+    - assets/en/data_storage/
+    - assets/en/debugging/
+    - assets/en/design_ui/
+    - assets/en/distillation/
+    - assets/en/documentation/
+    - assets/en/documentos/
+    - assets/en/documents/
+    - assets/en/evaluation/
+    - assets/en/finance/
+    - assets/en/finanzas/
+    - assets/en/flutter/
+    - assets/en/frontend/
+    - assets/en/git_workflow/
+    - assets/en/internationalization/
+    - assets/en/introspection/
+    - assets/en/kpis/
+    - assets/en/languages/
+    - assets/en/legal/
+    - assets/en/marketing/
+    - assets/en/memory/
+    - assets/en/metacognition/
+    - assets/en/performance/
+    - assets/en/personality/
+    - assets/en/planning/
+    - assets/en/product/
+    - assets/en/prompting/
+    - assets/en/recursos_humanos/
+    - assets/en/redaccion/
+    - assets/en/research/
+    - assets/en/security/
+    - assets/en/testing/
+    - assets/en/token_efficiency/
+    - assets/en/tools/
+    - assets/en/tramites/
+    - assets/en/ventas/
+    - assets/en/workflow/
+    - assets/en/writing_quality/

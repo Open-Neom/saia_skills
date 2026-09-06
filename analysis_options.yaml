@@ -1,0 +1,15 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # Las habilidades se cargan por ruta desde el manifiesto de assets, no
+    # por constantes: avisar de literales aquí sería ruido.
+    prefer_const_constructors: ignore
+  exclude:
+    - build/**
+
+linter:
+  rules:
+    - always_declare_return_types
+    - prefer_final_locals
+    - unawaited_futures
