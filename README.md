@@ -56,6 +56,42 @@ Cada habilidad se devuelve **una sola vez**: si existe en los dos idiomas,
 gana el preferido. Sin esa deduplicación, una interfaz mostraría el doble de
 entradas de las que hay habilidades distintas.
 
+### Divulgación Progresiva (Progressive Disclosure)
+
+En vez de inyectar todo el markdown en el System Prompt, inyecta solo descriptores compactos (~25 tokens por habilidad):
+
+```dart
+// Obtener descriptores de todas las habilidades
+final descriptors = await SaiaSkillCatalog.descriptors();
+
+// Generar líneas de System Prompt:
+// - [optimizacion_sql] (performance): Optimización de consultas SQL y planes.
+final promptLines = descriptors.map((d) => d.toPromptLine()).join('\n');
+```
+
+### Proyección Políglota Dinámica (Sin Language Drift)
+
+Para evitar que el agente mezcle idiomas o sufra *Language Drift*, la habilidad se proyecta al idioma de la conversación activa (`es`, `en`, `de`, `fr`, `pt`, `it`):
+
+```dart
+// Proyectar dinámicamente al idioma del usuario
+final directivas = await SaiaSkillCatalog.decodeSkill(
+  'optimizacion_sql',
+  targetLanguage: SaiaLanguage.german, // o .french, .spanish, .english
+);
+```
+
+### Composición con Presupuesto de Tokens
+
+```dart
+// Ensambla habilidades seleccionadas respetando el límite de contexto
+final promptSection = await SaiaSkillCatalog.composePrompt(
+  skills,
+  maxTokenBudget: 2048,
+  targetLanguage: SaiaLanguage.spanish,
+);
+```
+
 ## Layout
 
 ```

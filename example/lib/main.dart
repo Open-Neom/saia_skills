@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:saia_skills/saia_skills.dart';
 
-/// Demo del catálogo.
-///
-/// Además de mostrar la API, esta app comprueba lo que de verdad se rompía:
-/// consumido desde fuera, los assets viven bajo
-/// `packages/saia_skills/assets/`, no bajo `assets/`. Si el prefijo se
-/// resolviera mal, aquí saldría una lista vacía en vez de un fallo.
+/// Demo interactiva del catálogo saia_skills.
 void main() => runApp(const SaiaSkillsDemo());
 
 class SaiaSkillsDemo extends StatelessWidget {
@@ -36,8 +31,6 @@ class _CatalogPageState extends State<CatalogPage> {
   String _idioma = 'es';
   String _consulta = '';
 
-  /// Con búsqueda vacía se pide el catálogo agrupado; con texto, el
-  /// resultado plano de `search`. Son las dos formas normales de leerlo.
   Future<Map<String, List<SaiaSkill>>> _cargar() async {
     if (_consulta.trim().isEmpty) {
       return SaiaSkillCatalog.byCategory(preferLanguage: _idioma);
@@ -57,8 +50,6 @@ class _CatalogPageState extends State<CatalogPage> {
       appBar: AppBar(
         title: const Text('saia_skills'),
         actions: [
-          // El catálogo es bilingüe y `all()` devuelve una entrada por
-          // habilidad, no una por idioma.
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: SegmentedButton<String>(
@@ -78,7 +69,7 @@ class _CatalogPageState extends State<CatalogPage> {
             child: TextField(
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Buscar — «negociacion precios» encuentra el id',
+                hintText: 'Buscar habilidad o categoría…',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
@@ -110,12 +101,14 @@ class _CatalogPageState extends State<CatalogPage> {
               final skills = porCategoria[cat]!;
               return ExpansionTile(
                 title: Text(cat),
-                subtitle: Text('${skills.length}'),
+                subtitle: Text('${skills.length} habilidades'),
                 children: [
                   for (final s in skills)
                     ListTile(
                       title: Text(s.displayName),
+                      subtitle: Text(s.id),
                       dense: true,
+                      trailing: const Icon(Icons.chevron_right, size: 18),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => SkillPage(skill: s),
@@ -132,18 +125,45 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 }
 
-/// Contenido de una habilidad, tal cual viene del markdown.
-class SkillPage extends StatelessWidget {
+/// Vista detallada de una habilidad con proyección políglota interactiva.
+class SkillPage extends StatefulWidget {
   const SkillPage({required this.skill, super.key});
 
   final SaiaSkill skill;
 
   @override
+  State<SkillPage> createState() => _SkillPageState();
+}
+
+class _SkillPageState extends State<SkillPage> {
+  SaiaLanguage _targetLanguage = SaiaLanguage.spanish;
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(skill.displayName)),
+      appBar: AppBar(
+        title: Text(widget.skill.displayName),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: DropdownButton<SaiaLanguage>(
+              value: _targetLanguage,
+              underline: const SizedBox.shrink(),
+              items: SaiaLanguage.values.map((lang) {
+                return DropdownMenuItem(
+                  value: lang,
+                  child: Text(lang.code.toUpperCase()),
+                );
+              }).toList(),
+              onChanged: (lang) {
+                if (lang != null) setState(() => _targetLanguage = lang);
+              },
+            ),
+          ),
+        ],
+      ),
       body: FutureBuilder<String>(
-        future: skill.load(),
+        future: widget.skill.loadProjected(targetLanguage: _targetLanguage),
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());

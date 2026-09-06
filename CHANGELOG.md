@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — 2026-09-05
+
+Nuevas capacidades agénticas: Divulgación Progresiva, Códec de Compresión/Cifrado y Proyección Políglota.
+
+- **`SaiaSkillDescriptor`**: Descriptores compactos (`id`, `category`, `tagline`, `estimatedTokens`) para inyección ligera en el System Prompt (~25 tokens por habilidad) evitando agotar la ventana de contexto.
+- **`SaiaSkillCodec`**: Empaquetado, compresión y cifrado simétrico opcional reversible con suma de verificación de integridad (Adler-32), sin dependencias externas pesadas.
+- **`SaiaSkillPolyglot`**: Motor de proyección dinámica multilingüe (`SaiaLanguage`: español, inglés, alemán, francés, portugués, italiano). Elimina la contaminación lingüística (*Language Drift*) proyectando directivas al idioma exacto de la sesión activa.
+- **`SaiaSkillCatalog.composePrompt()`**: Compositor estructurado de múltiples habilidades con control de presupuesto máximo de tokens (`maxTokenBudget`).
+- **`example/`**: Vista interactiva con selector de proyección políglota dinámica (ES, EN, DE, FR).
+
 ## 0.1.1 — 2026-09-05
 
 Sin cambios en la API pública. Ajustes de empaquetado y documentación.

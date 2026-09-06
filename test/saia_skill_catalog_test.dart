@@ -19,8 +19,6 @@ void main() {
   });
 
   test('vienen repartidas en categorías, no todas en «general»', () async {
-    // El síntoma original: todo caía en «general» porque la expresión
-    // regular no sabía leer la categoría de la ruta.
     final porCat = await SaiaSkillCatalog.byCategory();
     expect(porCat.keys.length, greaterThan(10));
     expect(porCat.keys, isNot(equals({'general'})));
@@ -30,10 +28,6 @@ void main() {
     for (final s in (await SaiaSkillCatalog.all()).take(50)) {
       expect(s.id, isNotEmpty);
       expect(s.category, isNotEmpty);
-      // Consumido desde una app, el prefijo es
-      // `packages/saia_skills/assets/`; corriendo las pruebas del propio
-      // paquete, `assets/`. Lo que importa es que apunte a un asset del
-      // catálogo, no cuál de los dos prefijos toque.
       expect(s.assetPath, contains('assets/'));
       expect(s.assetPath, endsWith('.md'));
     }
@@ -53,8 +47,6 @@ void main() {
     });
 
     test('cada habilidad aparece UNA vez, no una por idioma', () async {
-      // Sin deduplicar, el usuario vería 708 entradas donde hay 354
-      // habilidades distintas.
       final skills = await SaiaSkillCatalog.all();
       final claves = skills.map((s) => '${s.category}/${s.id}').toList();
       expect(claves.length, claves.toSet().length,
@@ -108,10 +100,6 @@ void main() {
   group('búsqueda', () {
     test('ignora separadores: quien escribe con espacios encuentra el id',
         () async {
-      // Los ids son snake_case y quien busca escribe con espacios. Se elige
-      // un id real del catálogo en vez de uno inventado: al escribir esto
-      // asumí que `chain_of_thought` era una habilidad, y resultó ser una
-      // categoría.
       final todas = await SaiaSkillCatalog.all();
       final conGuion = todas.firstWhere((s) => s.id.contains('_'));
       final conEspacios = conGuion.id.replaceAll('_', ' ');
@@ -134,10 +122,116 @@ void main() {
     });
 
     test('una consulta vacía no devuelve el catálogo entero', () async {
-      // Devolver todo ante una caja de búsqueda vacía haría que la interfaz
-      // parpadeara con 354 resultados mientras el usuario escribe.
       expect(await SaiaSkillCatalog.search(''), isEmpty);
       expect(await SaiaSkillCatalog.search('   '), isEmpty);
+    });
+  });
+
+  group('descriptores y progressive disclosure', () {
+    test('genera descriptores ligeros para el catálogo', () async {
+      final descriptors = await SaiaSkillCatalog.descriptors();
+      expect(descriptors, isNotEmpty);
+      expect(descriptors.first.id, isNotEmpty);
+      expect(descriptors.first.toPromptLine(), startsWith('- ['));
+    });
+
+    test('toDescriptor conserva metadatos y calcula tokens estimados', () {
+      const skill = SaiaSkill(
+        id: 'optimizacion_sql',
+        category: 'performance',
+        language: 'es',
+        assetPath: 'assets/performance/optimizacion_sql.md',
+      );
+
+      final desc = skill.toDescriptor(tagline: 'Mejora índices y consultas');
+      expect(desc.id, 'optimizacion_sql');
+      expect(desc.toPromptLine(),
+          '- [optimizacion_sql] (performance): Mejora índices y consultas');
+      expect(desc.estimatedTokens, greaterThan(0));
+    });
+  });
+
+  group('códec de habilidades', () {
+    test('codifica y decodifica sin pérdida de contenido', () {
+      const markdown =
+          '# Directivas\n- Regla 1: Ser conciso.\n- Regla 2: Sin redundancia.';
+      final pkg = SaiaSkillCodec.encode(
+        id: 'test_skill',
+        category: 'rules',
+        language: 'es',
+        markdownContent: markdown,
+      );
+
+      expect(pkg.isEncrypted, isFalse);
+      expect(pkg.checksum, greaterThan(0));
+
+      final decoded = SaiaSkillCodec.decode(pkg);
+      expect(decoded, markdown);
+    });
+
+    test('cifra y descifra con clave simétrica', () {
+      const markdown = '# Secreto\nAlgoritmo confidencial de puntuación.';
+      final key = [12, 34, 56, 78, 90];
+
+      final pkg = SaiaSkillCodec.encode(
+        id: 'secret_skill',
+        category: 'security',
+        language: 'es',
+        markdownContent: markdown,
+        encryptionKey: key,
+      );
+
+      expect(pkg.isEncrypted, isTrue);
+
+      // Descifrado correcto
+      final decrypted = SaiaSkillCodec.decode(pkg, decryptionKey: key);
+      expect(decrypted, markdown);
+
+      // Descifrado con clave errónea falla
+      expect(
+        () => SaiaSkillCodec.decode(pkg, decryptionKey: [1, 2, 3]),
+        throwsStateError,
+      );
+    });
+  });
+
+  group('proyección políglota y composición', () {
+    test('proyecta directivas a alemán y francés previniendo language drift',
+        () async {
+      const raw =
+          '# Objetivo\nInstrucción general.\n# Reglas\nCumplir directivas.';
+
+      final de = await SaiaSkillPolyglot.project(
+        skillId: 'sample',
+        sourceMarkdown: raw,
+        sourceLanguage: 'es',
+        targetLanguage: SaiaLanguage.german,
+      );
+
+      expect(de, contains('# Ziel'));
+      expect(de, contains('# Regeln'));
+
+      final fr = await SaiaSkillPolyglot.project(
+        skillId: 'sample',
+        sourceMarkdown: raw,
+        sourceLanguage: 'es',
+        targetLanguage: SaiaLanguage.french,
+      );
+
+      expect(fr, contains('# Objectif'));
+      expect(fr, contains('# Règles'));
+    });
+
+    test('composePrompt respeta el presupuesto de tokens', () async {
+      final skills = (await SaiaSkillCatalog.all()).take(3).toList();
+      final composed = await SaiaSkillCatalog.composePrompt(
+        skills,
+        maxTokenBudget: 500,
+        targetLanguage: SaiaLanguage.spanish,
+      );
+
+      expect(composed, isNotEmpty);
+      expect(composed, contains('## Habilidad:'));
     });
   });
 }

@@ -2,6 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
+import 'saia_skill_codec.dart';
+import 'saia_skill_descriptor.dart';
+import 'saia_skill_polyglot.dart';
+
 /// Una habilidad del catálogo.
 class SaiaSkill {
   /// Nombre del archivo sin extensión: `chain_of_thought`.
@@ -34,8 +38,40 @@ class SaiaSkill {
       .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
       .join(' ');
 
-  /// Contenido markdown de la habilidad.
+  /// Contenido markdown de la habilidad en su idioma original.
   Future<String> load() => rootBundle.loadString(assetPath);
+
+  /// Carga y proyecta el contenido al [targetLanguage] solicitado.
+  ///
+  /// Evita que el agente sufra contaminación de idioma (Language Drift).
+  Future<String> loadProjected({
+    SaiaLanguage targetLanguage = SaiaLanguage.spanish,
+  }) async {
+    final raw = await load();
+    return SaiaSkillPolyglot.project(
+      skillId: id,
+      sourceMarkdown: raw,
+      sourceLanguage: language,
+      targetLanguage: targetLanguage,
+    );
+  }
+
+  /// Convierte esta habilidad en un [SaiaSkillDescriptor] para divulgación progresiva.
+  SaiaSkillDescriptor toDescriptor({
+    String tagline = '',
+    List<String> triggers = const [],
+    int estimatedTokens = 350,
+  }) {
+    return SaiaSkillDescriptor(
+      id: id,
+      category: category,
+      language: language,
+      displayName: displayName,
+      tagline: tagline,
+      triggers: triggers,
+      estimatedTokens: estimatedTokens,
+    );
+  }
 }
 
 /// Catálogo de habilidades SAIA.
@@ -53,24 +89,10 @@ class SaiaSkillCatalog {
   static const String _rootPrefix = 'assets/';
 
   /// Prefijo efectivo según quién está corriendo.
-  ///
-  /// Flutter reescribe las rutas de los assets de un paquete a
-  /// `packages/<nombre>/…` al empaquetarlos en una app. Corriendo
-  /// `flutter test` aquí dentro no hay reescritura: quedan en `assets/`.
-  ///
-  /// Fijar solo el primero hacía que el paquete no pudiera probarse a sí
-  /// mismo — el catálogo salía vacío y las pruebas fallaban sin decir por
-  /// qué. Se prefiere el prefijo de consumo y solo se cae al de raíz si no
-  /// hay ninguna coincidencia, para no confundir los assets de la app
-  /// anfitriona con habilidades.
   static String _prefixIn(List<String> assets) =>
       assets.any((a) => a.startsWith(assetPrefix)) ? assetPrefix : _rootPrefix;
 
   /// Ruta → categoría, idioma y nombre.
-  ///
-  /// El layout es `assets/[en/]<categoria>/<skill>.md`. El idioma es
-  /// opcional porque el español —el idioma primario de SAIA— vive en la
-  /// raíz; el inglés cuelga de `en/`.
   static final RegExp _rutaSkill = RegExp(
     r'assets/(?:(en)/)?(?:([^/]+)/)?([^/]+)\.md$',
   );
@@ -114,6 +136,28 @@ class SaiaSkillCatalog {
     return _filtrarPorIdioma(encontradas, preferLanguage);
   }
 
+  /// Devuelve los descriptores compactos de las habilidades para divulgación progresiva.
+  ///
+  /// Inyectar descriptores consume solo ~25 tokens por habilidad en el System Prompt,
+  /// permitiendo que el LLM conozca todo el catálogo sin agotar la ventana de contexto.
+  static Future<List<SaiaSkillDescriptor>> descriptors({
+    String preferLanguage = 'es',
+  }) async {
+    final skills = await all(preferLanguage: preferLanguage);
+    final metadata = await meta(language: preferLanguage);
+
+    return skills.map((s) {
+      var tagline = '';
+      if (metadata != null && metadata.containsKey(s.id)) {
+        final entry = metadata[s.id];
+        if (entry is Map<String, dynamic> && entry.containsKey('tagline')) {
+          tagline = entry['tagline'] as String? ?? '';
+        }
+      }
+      return s.toDescriptor(tagline: tagline);
+    }).toList();
+  }
+
   /// Agrupadas por categoría.
   static Future<Map<String, List<SaiaSkill>>> byCategory({
     String preferLanguage = 'es',
@@ -126,11 +170,6 @@ class SaiaSkillCatalog {
   }
 
   /// Las habilidades de UNA categoría.
-  ///
-  /// El caso normal de consumo no es «dame las 354»: es «dame las de
-  /// `backend`» para inyectarlas en un prompt, o «¿qué categorías hay?»
-  /// para pintar un menú. Pedir el catálogo entero y filtrarlo fuera
-  /// funciona, pero obliga a cada consumidor a repetir el mismo bucle.
   static Future<List<SaiaSkill>> forCategory(
     String category, {
     String preferLanguage = 'es',
@@ -148,11 +187,6 @@ class SaiaSkillCatalog {
   }
 
   /// Busca por nombre o categoría, sin distinguir mayúsculas ni acentos.
-  ///
-  /// Útil para el buscador de una interfaz: los ids son `snake_case` y quien
-  /// busca escribe con espacios, así que «negociacion precios» debe
-  /// encontrar `negociacion_precios`. Casa contra el id y contra la
-  /// categoría — buscar «cotizaciones» devuelve todas las de ese grupo.
   static Future<List<SaiaSkill>> search(
     String query, {
     String preferLanguage = 'es',
@@ -170,6 +204,72 @@ class SaiaSkillCatalog {
         .toList();
   }
 
+  /// Carga y decodifica una habilidad específica proyectada al [targetLanguage].
+  ///
+  /// Opcionalmente admite desencriptación si la habilidad fue empaquetada con cifrado.
+  static Future<String> decodeSkill(
+    String skillId, {
+    SaiaLanguage targetLanguage = SaiaLanguage.spanish,
+    List<int>? decryptionKey,
+  }) async {
+    final todas = await all(preferLanguage: targetLanguage.code);
+    final match = todas.firstWhere(
+      (s) => s.id == skillId,
+      orElse: () =>
+          throw ArgumentError('Habilidad no encontrada en catálogo: $skillId'),
+    );
+
+    final rawMarkdown = await match.load();
+
+    // Si viene como paquete codificado/cifrado, se procesa vía SaiaSkillCodec
+    String markdown = rawMarkdown;
+    if (rawMarkdown.startsWith('{"payload":') ||
+        rawMarkdown.contains('"checksum":')) {
+      try {
+        final map = jsonDecode(rawMarkdown) as Map<String, dynamic>;
+        final package = SaiaSkillPackage.fromMap(map);
+        markdown = SaiaSkillCodec.decode(package, decryptionKey: decryptionKey);
+      } catch (_) {
+        // Si no es JSON de SaiaSkillPackage, se toma como markdown directo
+      }
+    }
+
+    return SaiaSkillPolyglot.project(
+      skillId: skillId,
+      sourceMarkdown: markdown,
+      sourceLanguage: match.language,
+      targetLanguage: targetLanguage,
+    );
+  }
+
+  /// Compone múltiples habilidades en una sección estructurada de prompt
+  /// controlando un presupuesto máximo de tokens ([maxTokenBudget]).
+  static Future<String> composePrompt(
+    List<SaiaSkill> skills, {
+    int maxTokenBudget = 4000,
+    SaiaLanguage targetLanguage = SaiaLanguage.spanish,
+  }) async {
+    final buffer = StringBuffer();
+    var currentTokens = 0;
+
+    for (final s in skills) {
+      final content = await s.loadProjected(targetLanguage: targetLanguage);
+      final estimated = content.length ~/ 4;
+
+      if (currentTokens + estimated > maxTokenBudget && currentTokens > 0) {
+        break;
+      }
+
+      buffer.writeln('---');
+      buffer.writeln('## Habilidad: ${s.displayName}');
+      buffer.writeln(content);
+      buffer.writeln();
+      currentTokens += estimated;
+    }
+
+    return buffer.toString().trim();
+  }
+
   /// Metadatos opcionales (`skill_meta_es.json`), o null si no están.
   static Future<Map<String, dynamic>?> meta({String language = 'es'}) async {
     try {
@@ -184,12 +284,12 @@ class SaiaSkillCatalog {
   }
 
   /// Solo para pruebas: vacía la caché del manifiesto.
-  static void resetCache() => _cache = null;
+  static void resetCache() {
+    _cache = null;
+    SaiaSkillPolyglot.clearCache();
+  }
 
   /// Una habilidad por idioma: si existe en el preferido, la otra se omite.
-  ///
-  /// Sin esto el catálogo mostraría cada habilidad dos veces, y el usuario
-  /// vería 708 entradas donde hay 354 habilidades distintas.
   static List<SaiaSkill> _filtrarPorIdioma(
     List<SaiaSkill> todas,
     String preferido,
