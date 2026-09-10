@@ -16,6 +16,14 @@ class SaiaSkillDescriptor {
   /// Resumen ultra-corto (<100 caracteres) enfocado en la directiva.
   final String tagline;
 
+  /// Criterio de activación: **cuándo** conviene usar esta habilidad.
+  ///
+  /// Es el campo que decide si la divulgación progresiva sirve de algo. Un
+  /// índice de nombres solo permite que el agente reconozca lo que ya sabe
+  /// buscar; con el criterio de activación puede elegir sin que la persona
+  /// tenga que recorrer el catálogo.
+  final String description;
+
   /// Palabras clave o frases de activación opcionales.
   final List<String> triggers;
 
@@ -29,6 +37,7 @@ class SaiaSkillDescriptor {
     required this.language,
     required this.displayName,
     this.tagline = '',
+    this.description = '',
     this.triggers = const [],
     this.estimatedTokens = 350,
   });
@@ -36,10 +45,19 @@ class SaiaSkillDescriptor {
   /// Genera una línea formateada para inyectar en el System Prompt.
   ///
   /// Ocupa ~20-30 tokens en lugar de miles de tokens de markdown completo.
+  /// Prefiere el criterio de activación sobre el resumen, y el resumen
+  /// sobre el nombre. Caer en el nombre significa que esa habilidad no es
+  /// seleccionable por el modelo: `Error Detective` no le dice cuándo usarla.
   String toPromptLine() {
-    final summary = tagline.isNotEmpty ? tagline : displayName;
+    final summary = description.isNotEmpty
+        ? description
+        : (tagline.isNotEmpty ? tagline : displayName);
     return '- [$id] ($category): $summary';
   }
+
+  /// Si el modelo tiene con qué decidir. Falso cuando solo hay el nombre
+  /// derivado del archivo.
+  bool get isSelectable => description.isNotEmpty || tagline.isNotEmpty;
 
   @override
   String toString() => 'SaiaSkillDescriptor($id, category: $category)';

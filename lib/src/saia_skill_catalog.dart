@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
 import 'saia_skill_codec.dart';
 import 'saia_skill_descriptor.dart';
+import 'saia_skill_frontmatter.dart';
 import 'saia_skill_polyglot.dart';
 
 /// Una habilidad del catálogo.
@@ -44,10 +45,14 @@ class SaiaSkill {
   /// Carga y proyecta el contenido al [targetLanguage] solicitado.
   ///
   /// Evita que el agente sufra contaminación de idioma (Language Drift).
+  ///
+  /// Proyecta el **cuerpo**, no el archivo crudo: el frontmatter son
+  /// metadatos para seleccionar la habilidad, y mandárselo al modelo dentro
+  /// del prompt solo gasta contexto.
   Future<String> loadProjected({
     SaiaLanguage targetLanguage = SaiaLanguage.spanish,
   }) async {
-    final raw = await load();
+    final raw = await loadBody();
     return SaiaSkillPolyglot.project(
       skillId: id,
       sourceMarkdown: raw,
@@ -56,18 +61,35 @@ class SaiaSkill {
     );
   }
 
+  /// Frontmatter declarado en el archivo, si lo trae.
+  ///
+  /// Cuesta una lectura del asset, así que no se usa para construir el
+  /// índice completo; sirve cuando ya se va a cargar esa habilidad.
+  Future<SaiaSkillFrontmatter> frontmatter() async =>
+      SaiaSkillFrontmatter.parse(await load());
+
+  /// Markdown sin el bloque de frontmatter.
+  ///
+  /// Lo que se inyecta en un prompt debe ser esto y no [load]: si no, las
+  /// habilidades que declaran metadatos le mandan al modelo su propio YAML.
+  Future<String> loadBody() async =>
+      SaiaSkillFrontmatter.parse(await load()).body;
+
   /// Convierte esta habilidad en un [SaiaSkillDescriptor] para divulgación progresiva.
   SaiaSkillDescriptor toDescriptor({
     String tagline = '',
+    String description = '',
     List<String> triggers = const [],
     int estimatedTokens = 350,
+    String? displayNameOverride,
   }) {
     return SaiaSkillDescriptor(
       id: id,
       category: category,
       language: language,
-      displayName: displayName,
+      displayName: displayNameOverride ?? displayName,
       tagline: tagline,
+      description: description,
       triggers: triggers,
       estimatedTokens: estimatedTokens,
     );
@@ -142,20 +164,64 @@ class SaiaSkillCatalog {
   /// permitiendo que el LLM conozca todo el catálogo sin agotar la ventana de contexto.
   static Future<List<SaiaSkillDescriptor>> descriptors({
     String preferLanguage = 'es',
+    String? category,
+    bool includeFrontmatter = false,
   }) async {
-    final skills = await all(preferLanguage: preferLanguage);
-    final metadata = await meta(language: preferLanguage);
+    var skills = await all(preferLanguage: preferLanguage);
+    if (category != null) {
+      skills = skills.where((s) => s.category == category).toList();
+    }
 
-    return skills.map((s) {
+    // `meta()` devuelve el documento completo; las habilidades cuelgan de
+    // `skills` y están indexadas en camelCase, mientras los ids del catálogo
+    // vienen en snake_case del nombre de archivo. Buscar `s.id` en la raíz
+    // no acertaba nunca: los 358 descriptores salían sin tagline y el índice
+    // se quedaba en nombres derivados del archivo, que es justo lo que la
+    // divulgación progresiva pretendía evitar.
+    final documento = await meta(language: preferLanguage);
+    final entradas = documento?['skills'];
+    final tabla = entradas is Map<String, dynamic> ? entradas : const {};
+
+    final out = <SaiaSkillDescriptor>[];
+    for (final s in skills) {
       var tagline = '';
-      if (metadata != null && metadata.containsKey(s.id)) {
-        final entry = metadata[s.id];
-        if (entry is Map<String, dynamic> && entry.containsKey('tagline')) {
-          tagline = entry['tagline'] as String? ?? '';
-        }
+      var description = '';
+      String? nombre;
+
+      final entrada = tabla[_camelCase(s.id)] ?? tabla[s.id];
+      if (entrada is Map<String, dynamic>) {
+        tagline = entrada['tagline'] as String? ?? '';
+        description = entrada['description'] as String? ?? '';
+        nombre = entrada['name'] as String?;
       }
-      return s.toDescriptor(tagline: tagline);
-    }).toList();
+
+      // El frontmatter del propio archivo manda sobre el JSON: vive junto al
+      // contenido y no se desincroniza. Cuesta una lectura por habilidad, así
+      // que es opcional.
+      if (includeFrontmatter) {
+        final fm = await s.frontmatter();
+        if (fm.description != null && fm.description!.isNotEmpty) {
+          description = fm.description!;
+        }
+        if (fm.name != null && fm.name!.isNotEmpty) nombre = fm.name;
+      }
+
+      out.add(s.toDescriptor(
+        tagline: tagline,
+        description: description,
+        displayNameOverride: nombre,
+      ));
+    }
+    return out;
+  }
+
+  /// `calculadora_costos` → `calculadoraCostos`, que es como están indexadas
+  /// las habilidades en `skill_meta_<idioma>.json`.
+  static String _camelCase(String id) {
+    final p = id.split('_').where((w) => w.isNotEmpty).toList();
+    if (p.isEmpty) return id;
+    return p.first +
+        p.skip(1).map((w) => '${w[0].toUpperCase()}${w.substring(1)}').join();
   }
 
   /// Agrupadas por categoría.

@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.3.0 — 2026-09-09
+
+Criterio de activación: el índice de divulgación progresiva pasa de
+decorativo a utilizable.
+
+### Corregido
+
+- **`descriptors()` no resolvía ningún metadato.** Buscaba el id en la raíz
+  del documento que devuelve `meta()`, pero las habilidades cuelgan de
+  `skills` y están indexadas en camelCase, mientras los ids del catálogo
+  vienen en snake_case del nombre de archivo. Ninguna casaba: los 358
+  descriptores salían con `tagline` vacío y `toPromptLine()` caía siempre en
+  el nombre derivado del archivo. El índice no fallaba, simplemente no decía
+  nada — un agente que lo leyera veía `- [error_detective] (adaptability):
+  Error Detective`, que no permite decidir nada. Ahora 160 de 358 traen
+  criterio de activación, y 181 con `includeFrontmatter: true`.
+- **`loadProjected()` mandaba el frontmatter al modelo.** Proyectaba el
+  archivo crudo, así que las habilidades que declaran metadatos gastaban
+  contexto en su propio YAML. Ahora proyecta el cuerpo.
+
+### Añadido
+
+- **`SaiaSkillFrontmatter`** — separa el bloque `---` del cuerpo. Reconoce
+  `clave: valor`, bloques plegados (`>`, `>-`), literales (`|`, `|-`) y
+  continuaciones indentadas. Es la convención que ya usan Claude Code, el
+  CLI `skills` de Dart y el importador de Itzli; adoptarla deja que una
+  misma habilidad sirva a los tres.
+- **`SaiaSkillDescriptor.description`** — el criterio de activación, o sea
+  *cuándo* usar la habilidad, frente al `tagline`, que dice de qué trata.
+  Es la diferencia entre que el agente elija y que tenga que elegir la
+  persona entre cientos.
+- **`SaiaSkillDescriptor.isSelectable`** — si hay con qué decidir. Sirve para
+  medir la cobertura del catálogo en vez de suponerla.
+- **`descriptors(category:)`** — el índice de una categoría. El catálogo
+  entero no cabe en un prompt; el de una categoría sí (~1.5k tokens).
+- **`descriptors(includeFrontmatter:)`** — deja que el archivo mande sobre
+  el JSON. Cuesta una lectura por habilidad, por eso es opcional.
+- **`SaiaSkill.frontmatter()`** y **`SaiaSkill.loadBody()`**.
+
+### Nota sobre cobertura
+
+173 de las 353 habilidades no declaran criterio de activación en ninguna
+fuente. Aparecen en el índice con su nombre y `isSelectable == false`: son
+visibles pero el modelo no puede elegirlas por sí solo. Completarlas es
+trabajo de contenido, no de código.
+
 ## 0.2.0 — 2026-09-05
 
 Nuevas capacidades agénticas: Divulgación Progresiva, Códec de Compresión/Cifrado y Proyección Políglota.

@@ -1,6 +1,6 @@
 name: saia_skills
 description: Skill catalog for SAIA agents. Bilingual markdown skills with a read API and no inference engine attached.
-version: 0.2.0
+version: 0.3.0
 homepage: https://github.com/Open-Neom/saia_skills
 repository: https://github.com/Open-Neom/saia_skills
 issue_tracker: https://github.com/Open-Neom/saia_skills/issues

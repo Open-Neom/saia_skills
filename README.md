@@ -92,6 +92,40 @@ final promptSection = await SaiaSkillCatalog.composePrompt(
 );
 ```
 
+## Selección por el agente
+
+El caso difícil no es leer una habilidad: es decidir cuál. El catálogo
+entero no cabe en un prompt, así que se inyecta un índice compacto y solo
+se carga el cuerpo de la elegida.
+
+```dart
+// ~25 tokens por habilidad en vez de miles
+final indice = await SaiaSkillCatalog.descriptors(category: 'cotizaciones');
+final texto  = indice.map((d) => d.toPromptLine()).join('\n');
+
+// … el modelo responde con un id …
+final skill = (await SaiaSkillCatalog.forCategory('cotizaciones'))
+    .firstWhere((s) => s.id == elegido);
+final cuerpo = await skill.loadBody();
+```
+
+Lo que hace útil al índice es `description`: no dice de qué trata la
+habilidad, dice **cuándo usarla**. Sin él, una línea como
+`- [error_detective] (adaptability): Error Detective` no le permite al
+modelo decidir nada.
+
+```
+---
+name: Negociación de Precios
+description: Úsala cuando el usuario tenga que defender un precio ante un
+  cliente sin sacrificar margen ni la relación
+---
+```
+
+`isSelectable` indica si una habilidad tiene con qué ser elegida.
+`descriptors(includeFrontmatter: true)` deja que el archivo mande sobre los
+metadatos externos, a cambio de una lectura por habilidad.
+
 ## Layout
 
 ```
@@ -105,8 +139,10 @@ assets/skill_meta_es.json           metadatos opcionales
 1. Crea el `.md` bajo su categoría.
 2. Si la categoría es nueva, declárala en `pubspec.yaml`.
 
-No hay registro que actualizar ni índice que regenerar: el catálogo se
-construye leyendo el manifiesto de assets en tiempo de ejecución.
+El catálogo se construye leyendo el manifiesto de assets en tiempo de
+ejecución, así que no hay registro que actualizar para que la habilidad
+aparezca. Para que además sea **seleccionable por un agente**, declara el
+criterio de activación en el frontmatter.
 
 ## Licencia
 
