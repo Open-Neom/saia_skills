@@ -259,9 +259,16 @@
     "disenoMovil":              { "tagline": "Diseno movil que si funciona",              "description": "Tamanos tactiles, jerarquia, gestos y rendimiento en contextos reales." },
     "principiosDisenoUiUx":     { "tagline": "Principios de UI/UX sin fluff",             "description": "Consistencia, retroalimentacion, jerarquia y reduccion de carga cognitiva." },
     "sistemasDeDisenoSkill":    { "tagline": "Construye tu sistema de diseno",            "description": "Tokens, componentes y guias para escalar tu UI sin divergencias cada sprint." },
+    "sistemasDeDiseno":         { "tagline": "Construye tu sistema de diseno",            "description": "Tokens, componentes y guias para escalar tu UI sin divergencias cada sprint." },
+    "doctrinaAntislopUi":       { "tagline": "Diseno UI con gusto y sin AI Slop",         "description": "Varianza de layouts, economia de pantalla, jerarquia en 3s y cero cliches genericos." },
+    "coreografiaMovimientoGlass":{ "tagline": "Animaciones fisicas y Liquid Glass",       "description": "Curvas de entrada/salida, stagger agil, tokens de blur y superficies translucidas." },
+    "uxWritingMicrocopy":       { "tagline": "Microcopy claro para gente real",           "description": "Verbos al frente en botones, errores accionables y estados vacios con proposito." },
+    "estadosInteractivosFlutter":{ "tagline": "Tokens y 8 estados UI en Flutter",         "description": "ThemeExtension semantico, los 8 estados interactivos obligatorios y Semantics." },
+    "arquetiposEsteticosUi":    { "tagline": "6 arquetipos esteticos de producto",        "description": "De Obsidian Dark-Tech a Warm Soft-SaaS y Studio Bento mapeados a tokens." },
 
     "cavemanCommit":            { "tagline": "Commits sencillos, sin ceremonia",          "description": "Mensajes cortos y utiles que se leen bien en 5 anos; deja el formato solemne." },
     "cavemanMode":              { "tagline": "Modo cavernicola: hazlo simple",            "description": "Recordatorio de usar lo minimo que resuelve hoy y no la abstraccion futura." },
-    "cavemanReview":            { "tagline": "Review estilo cavernicola",                 "description": "Revisa con preguntas basicas: funciona, se entiende, rompe algo? Ya." }
+    "cavemanReview":            { "tagline": "Review estilo cavernicola",                 "description": "Revisa con preguntas basicas: funciona, se entiende, rompe algo? Ya." },
+    "creadorHabilidadesAutonomo": { "tagline": "Auto-creacion y mejora de skills",        "description": "Crea, edita, parchea y audita habilidades procedimentales reutilizables en Itzli tras resolver flujos complejos." }
   }
 }

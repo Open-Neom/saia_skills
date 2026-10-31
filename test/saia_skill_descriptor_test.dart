@@ -65,4 +65,38 @@ void main() {
     expect(texto.length ~/ 4, lessThan(2000),
         reason: 'tokens estimados del índice de una categoría');
   });
+
+  test('design_ui incluye las nuevas skills de UX/UI en español e inglés',
+      () async {
+    final esDescriptors = await SaiaSkillCatalog.descriptors(
+      category: 'design_ui',
+      preferLanguage: 'es',
+      includeFrontmatter: true,
+    );
+    final ids = esDescriptors.map((x) => x.id).toSet();
+
+    expect(
+      ids,
+      containsAll(<String>{
+        'doctrina_antislop_ui',
+        'coreografia_movimiento_glass',
+        'ux_writing_microcopy',
+        'estados_interactivos_flutter',
+        'arquetipos_esteticos_ui',
+      }),
+    );
+
+    for (final d in esDescriptors) {
+      expect(d.isSelectable, isTrue,
+          reason: '${d.id} debe tener tagline o description en skill_meta_es');
+    }
+
+    SaiaSkillCatalog.resetCache();
+    final enSkills = await SaiaSkillCatalog.forCategory(
+      'design_ui',
+      preferLanguage: 'en',
+    );
+    expect(enSkills.every((s) => s.language == 'en'), isTrue);
+    expect(enSkills.length, esDescriptors.length);
+  });
 }

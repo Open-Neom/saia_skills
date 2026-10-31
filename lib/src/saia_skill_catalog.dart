@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
+import 'saia_dynamic_skill_store.dart';
 import 'saia_skill_codec.dart';
 import 'saia_skill_descriptor.dart';
 import 'saia_skill_frontmatter.dart';
@@ -212,6 +213,14 @@ class SaiaSkillCatalog {
         displayNameOverride: nombre,
       ));
     }
+
+    // Merge self-synthesized procedural skills from SaiaDynamicSkillStore
+    for (final dyn in SaiaDynamicSkillStore.instance.descriptors()) {
+      if (category != null && dyn.category != category) continue;
+      out.removeWhere((existing) => existing.id == dyn.id);
+      out.add(dyn);
+    }
+
     return out;
   }
 

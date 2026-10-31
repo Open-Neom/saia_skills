@@ -1825,6 +1825,56 @@
       "pillar": "crear",
       "displayCategory": "Diseño UI/UX"
     },
+    "design_ui/doctrina_antislop_ui": {
+      "primaryArtifact": "checklist",
+      "secondaryArtifacts": [
+        "compareTable"
+      ],
+      "instrument": "LENS",
+      "altInstrument": "COMPASS",
+      "pillar": "crear",
+      "displayCategory": "Diseño UI/UX"
+    },
+    "design_ui/coreografia_movimiento_glass": {
+      "primaryArtifact": "stepRail",
+      "secondaryArtifacts": [
+        "checklist"
+      ],
+      "instrument": "RHYTHM",
+      "altInstrument": "SPARK",
+      "pillar": "crear",
+      "displayCategory": "Diseño UI/UX"
+    },
+    "design_ui/ux_writing_microcopy": {
+      "primaryArtifact": "compareTable",
+      "secondaryArtifacts": [
+        "checklist"
+      ],
+      "instrument": "MIRROR",
+      "altInstrument": "SPARK",
+      "pillar": "crear",
+      "displayCategory": "Diseño UI/UX"
+    },
+    "design_ui/estados_interactivos_flutter": {
+      "primaryArtifact": "checklist",
+      "secondaryArtifacts": [
+        "stepRail"
+      ],
+      "instrument": "WEAVE",
+      "altInstrument": "LENS",
+      "pillar": "crear",
+      "displayCategory": "Diseño UI/UX"
+    },
+    "design_ui/arquetipos_esteticos_ui": {
+      "primaryArtifact": "compareTable",
+      "secondaryArtifacts": [
+        "plasticitySelector"
+      ],
+      "instrument": "SPARK",
+      "altInstrument": "COMPASS",
+      "pillar": "crear",
+      "displayCategory": "Diseño UI/UX"
+    },
     "distillation/context_compression": {
       "primaryArtifact": "distillFilter",
       "secondaryArtifacts": [

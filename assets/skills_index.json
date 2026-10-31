@@ -380,7 +380,12 @@
         "diseno_movil": {"tags": ["movil", "touch", "responsive"], "onboarding": ["designer", "developer"]},
         "sistemas_de_diseno": {"tags": ["design-system", "tokens", "componentes"], "onboarding": ["designer", "developer"]},
         "accesibilidad_interfaces": {"tags": ["accesibilidad", "wcag", "a11y"], "onboarding": ["designer", "developer"]},
-        "dashboards_kpi": {"tags": ["dashboards", "kpi", "visualizacion"], "onboarding": ["designer", "emprendedor", "product_manager"]}
+        "dashboards_kpi": {"tags": ["dashboards", "kpi", "visualizacion"], "onboarding": ["designer", "emprendedor", "product_manager"]},
+        "doctrina_antislop_ui": {"tags": ["anti-slop", "taste", "jerarquia", "bento", "screen-economy"], "onboarding": ["designer", "developer", "product_manager"]},
+        "coreografia_movimiento_glass": {"tags": ["motion", "animaciones", "liquid-glass", "blur", "stagger"], "onboarding": ["designer", "developer"]},
+        "ux_writing_microcopy": {"tags": ["ux-writing", "microcopy", "cta", "errores", "empty-states"], "onboarding": ["designer", "product_manager", "developer"]},
+        "estados_interactivos_flutter": {"tags": ["flutter", "tokens", "estados", "theme-extension", "a11y"], "onboarding": ["developer", "designer"]},
+        "arquetipos_esteticos_ui": {"tags": ["arquetipos", "estetica", "dark-tech", "soft-saas", "editorial"], "onboarding": ["designer", "developer", "product_manager"]}
       }
     },
     "documentation": {
