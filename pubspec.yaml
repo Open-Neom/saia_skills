@@ -4,6 +4,8 @@ version: 0.3.0
 homepage: https://github.com/Open-Neom/saia_skills
 repository: https://github.com/Open-Neom/saia_skills
 issue_tracker: https://github.com/Open-Neom/saia_skills/issues
+funding:
+  - https://github.com/sponsors/Open-Neom
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
