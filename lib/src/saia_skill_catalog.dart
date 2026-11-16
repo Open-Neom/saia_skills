@@ -41,7 +41,18 @@ class SaiaSkill {
       .join(' ');
 
   /// Contenido markdown de la habilidad en su idioma original.
-  Future<String> load() => rootBundle.loadString(assetPath);
+  Future<String> load() async {
+    if (assetPath.startsWith('dynamic://')) {
+      final dynId = assetPath.substring('dynamic://'.length);
+      final dyn = SaiaDynamicSkillStore.instance.getById(dynId) ??
+          SaiaDynamicSkillStore.instance.getById(id);
+      if (dyn == null) {
+        throw StateError('Habilidad dinámica no encontrada: $id');
+      }
+      return dyn.toSkillMarkdown();
+    }
+    return rootBundle.loadString(assetPath);
+  }
 
   /// Carga y proyecta el contenido al [targetLanguage] solicitado.
   ///
@@ -73,8 +84,17 @@ class SaiaSkill {
   ///
   /// Lo que se inyecta en un prompt debe ser esto y no [load]: si no, las
   /// habilidades que declaran metadatos le mandan al modelo su propio YAML.
-  Future<String> loadBody() async =>
-      SaiaSkillFrontmatter.parse(await load()).body;
+  Future<String> loadBody() async {
+    if (assetPath.startsWith('dynamic://')) {
+      final dynId = assetPath.substring('dynamic://'.length);
+      final dyn = SaiaDynamicSkillStore.instance.getById(dynId) ??
+          SaiaDynamicSkillStore.instance.getById(id);
+      if (dyn != null) {
+        return SaiaSkillFrontmatter.parse(dyn.markdownBody).body;
+      }
+    }
+    return SaiaSkillFrontmatter.parse(await load()).body;
+  }
 
   /// Convierte esta habilidad en un [SaiaSkillDescriptor] para divulgación progresiva.
   SaiaSkillDescriptor toDescriptor({
@@ -183,36 +203,37 @@ class SaiaSkillCatalog {
     final entradas = documento?['skills'];
     final tabla = entradas is Map<String, dynamic> ? entradas : const {};
 
-    final out = <SaiaSkillDescriptor>[];
-    for (final s in skills) {
-      var tagline = '';
-      var description = '';
-      String? nombre;
+    final out = (await Future.wait(
+      skills.map((s) async {
+        var tagline = '';
+        var description = '';
+        String? nombre;
 
-      final entrada = tabla[_camelCase(s.id)] ?? tabla[s.id];
-      if (entrada is Map<String, dynamic>) {
-        tagline = entrada['tagline'] as String? ?? '';
-        description = entrada['description'] as String? ?? '';
-        nombre = entrada['name'] as String?;
-      }
-
-      // El frontmatter del propio archivo manda sobre el JSON: vive junto al
-      // contenido y no se desincroniza. Cuesta una lectura por habilidad, así
-      // que es opcional.
-      if (includeFrontmatter) {
-        final fm = await s.frontmatter();
-        if (fm.description != null && fm.description!.isNotEmpty) {
-          description = fm.description!;
+        final entrada = tabla[_camelCase(s.id)] ?? tabla[s.id];
+        if (entrada is Map<String, dynamic>) {
+          tagline = entrada['tagline'] as String? ?? '';
+          description = entrada['description'] as String? ?? '';
+          nombre = entrada['name'] as String?;
         }
-        if (fm.name != null && fm.name!.isNotEmpty) nombre = fm.name;
-      }
 
-      out.add(s.toDescriptor(
-        tagline: tagline,
-        description: description,
-        displayNameOverride: nombre,
-      ));
-    }
+        // El frontmatter del propio archivo manda sobre el JSON: vive junto al
+        // contenido y no se desincroniza. Cuesta una lectura por habilidad, así
+        // que es opcional y se paraleliza con Future.wait.
+        if (includeFrontmatter) {
+          final fm = await s.frontmatter();
+          if (fm.description != null && fm.description!.isNotEmpty) {
+            description = fm.description!;
+          }
+          if (fm.name != null && fm.name!.isNotEmpty) nombre = fm.name;
+        }
+
+        return s.toDescriptor(
+          tagline: tagline,
+          description: description,
+          displayNameOverride: nombre,
+        );
+      }),
+    )).toList();
 
     // Merge self-synthesized procedural skills from SaiaDynamicSkillStore
     for (final dyn in SaiaDynamicSkillStore.instance.descriptors()) {
@@ -273,10 +294,27 @@ class SaiaSkillCatalog {
         v.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
 
     final todas = await all(preferLanguage: preferLanguage);
-    return todas
+    final resultados = todas
         .where((s) =>
             normalizar(s.id).contains(q) || normalizar(s.category).contains(q))
         .toList();
+
+    for (final dyn in SaiaDynamicSkillStore.instance.all) {
+      final matchesDyn = normalizar(dyn.id).contains(q) ||
+          normalizar(dyn.category).contains(q) ||
+          normalizar(dyn.displayName).contains(q) ||
+          dyn.triggers.any((t) => normalizar(t).contains(q));
+      if (!matchesDyn) continue;
+      resultados.removeWhere((existing) => existing.id == dyn.id);
+      resultados.add(SaiaSkill(
+        id: dyn.id,
+        category: dyn.category,
+        language: dyn.language,
+        assetPath: 'dynamic://${dyn.id}',
+      ));
+    }
+
+    return resultados;
   }
 
   /// Carga y decodifica una habilidad específica proyectada al [targetLanguage].
@@ -287,9 +325,22 @@ class SaiaSkillCatalog {
     SaiaLanguage targetLanguage = SaiaLanguage.spanish,
     List<int>? decryptionKey,
   }) async {
+    final dynamicMatch = SaiaDynamicSkillStore.instance.getById(skillId);
+    if (dynamicMatch != null) {
+      final cleanBody =
+          SaiaSkillFrontmatter.parse(dynamicMatch.markdownBody).body;
+      return SaiaSkillPolyglot.project(
+        skillId: dynamicMatch.id,
+        sourceMarkdown: cleanBody,
+        sourceLanguage: dynamicMatch.language,
+        targetLanguage: targetLanguage,
+      );
+    }
+
     final todas = await all(preferLanguage: targetLanguage.code);
+    final normalizedId = skillId.trim().toLowerCase().replaceAll('-', '_');
     final match = todas.firstWhere(
-      (s) => s.id == skillId,
+      (s) => s.id == skillId || s.id == normalizedId,
       orElse: () =>
           throw ArgumentError('Habilidad no encontrada en catálogo: $skillId'),
     );
@@ -309,9 +360,11 @@ class SaiaSkillCatalog {
       }
     }
 
+    final body = SaiaSkillFrontmatter.parse(markdown).body;
+
     return SaiaSkillPolyglot.project(
-      skillId: skillId,
-      sourceMarkdown: markdown,
+      skillId: match.id,
+      sourceMarkdown: body,
       sourceLanguage: match.language,
       targetLanguage: targetLanguage,
     );

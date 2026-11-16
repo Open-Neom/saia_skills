@@ -60,6 +60,7 @@ abstract class SaiaSkillLanguageAdapter {
 class SaiaSkillPolyglot {
   SaiaSkillPolyglot._();
 
+  static const int maxCacheEntries = 256;
   static SaiaSkillLanguageAdapter? _customAdapter;
   static final Map<String, String> _memoryCache = {};
 
@@ -132,7 +133,7 @@ class SaiaSkillPolyglot {
       return sourceMarkdown;
     }
 
-    final cacheKey = '${skillId}_${targetLanguage.code}';
+    final cacheKey = '$skillId\x00${targetLanguage.code}';
     if (_memoryCache.containsKey(cacheKey)) {
       return _memoryCache[cacheKey]!;
     }
@@ -156,6 +157,9 @@ class SaiaSkillPolyglot {
       }
     }
 
+    if (_memoryCache.length >= maxCacheEntries) {
+      _memoryCache.remove(_memoryCache.keys.first);
+    }
     _memoryCache[cacheKey] = result;
     return result;
   }

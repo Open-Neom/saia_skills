@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:saia_skills/saia_skills.dart';
+import 'package:sint/sint.dart';
 
 /// Demo interactiva del catálogo saia_skills.
 void main() => runApp(const SaiaSkillsDemo());
@@ -9,13 +10,16 @@ class SaiaSkillsDemo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return SintMaterialApp(
       title: 'saia_skills',
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFFB07D3A),
         useMaterial3: true,
       ),
-      home: const CatalogPage(),
+      initialRoute: '/',
+      sintPages: [
+        SintPage(name: '/', page: () => const CatalogPage()),
+      ],
     );
   }
 }
@@ -109,11 +113,7 @@ class _CatalogPageState extends State<CatalogPage> {
                       subtitle: Text(s.id),
                       dense: true,
                       trailing: const Icon(Icons.chevron_right, size: 18),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => SkillPage(skill: s),
-                        ),
-                      ),
+                      onTap: () => Sint.to<void>(() => SkillPage(skill: s)),
                     ),
                 ],
               );

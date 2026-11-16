@@ -1,5 +1,6 @@
 name: saia_skills
 description: Skill catalog for SAIA agents. Bilingual markdown skills with a read API and no inference engine attached.
+publish_to: 'none'
 version: 0.3.0
 homepage: https://github.com/Open-Neom/saia_skills
 repository: https://github.com/Open-Neom/saia_skills
@@ -21,6 +22,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+
 
 flutter:
   assets:

@@ -118,7 +118,9 @@ final class SaiaPipelinePlan {
     final dependents = <String, List<String>>{for (final s in byId.values) s.id: []};
 
     for (final stage in byId.values) {
+      final seenDeps = <String>{};
       for (final dep in stage.dependsOn) {
+        if (!seenDeps.add(dep)) continue;
         if (!byId.containsKey(dep)) {
           issues.add(
             SaiaPipelineIssue(
@@ -160,25 +162,52 @@ final class SaiaPipelinePlan {
       );
     }
 
+    final hasInvalidAvailableRam = availableRamGb != null &&
+        (!availableRamGb.isFinite || availableRamGb < 0);
+    if (hasInvalidAvailableRam) {
+      issues.add(
+        const SaiaPipelineIssue(
+          code: SaiaPipelineIssueCode.insufficientRamBudget,
+          message: 'Presupuesto de RAM disponible inválido (NaN/Infinity/<0).',
+        ),
+      );
+    }
+
     final availableArtifacts = <String>{...initialInputs};
     var peakRamGb = 0.0;
     var totalSec = 0;
 
     for (final stageId in order) {
       final stage = byId[stageId]!;
-      peakRamGb = math.max(peakRamGb, stage.requiredRamGb);
-      totalSec += math.max(0, stage.estimatedDurationSec);
-
-      if (availableRamGb != null && stage.requiredRamGb > availableRamGb) {
+      final stageRam = stage.requiredRamGb;
+      if (!stageRam.isFinite || stageRam < 0) {
         issues.add(
           SaiaPipelineIssue(
             code: SaiaPipelineIssueCode.insufficientRamBudget,
             stageId: stage.id,
-            message: 'Requiere ${stage.requiredRamGb.toStringAsFixed(1)} GB RAM '
-                '(disponible: ${availableRamGb.toStringAsFixed(1)} GB).',
+            message:
+                'Requerimiento de RAM inválido en "${stage.id}" (NaN/Infinity/<0).',
           ),
         );
+      } else {
+        peakRamGb = math.max(peakRamGb, stageRam);
+        if (availableRamGb != null &&
+            !hasInvalidAvailableRam &&
+            stageRam > availableRamGb) {
+          issues.add(
+            SaiaPipelineIssue(
+              code: SaiaPipelineIssueCode.insufficientRamBudget,
+              stageId: stage.id,
+              message: 'Requiere ${stageRam.toStringAsFixed(1)} GB RAM '
+                  '(disponible: ${availableRamGb.toStringAsFixed(1)} GB).',
+            ),
+          );
+        }
       }
+      final safeStageDuration = stage.estimatedDurationSec.isFinite
+          ? stage.estimatedDurationSec.clamp(0, 31536000)
+          : 0;
+      totalSec = (totalSec + safeStageDuration).clamp(0, 315360000);
 
       for (final input in stage.requiredInputs) {
         if (!availableArtifacts.contains(input)) {

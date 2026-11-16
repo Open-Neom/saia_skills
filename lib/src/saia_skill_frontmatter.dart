@@ -61,6 +61,7 @@ class SaiaSkillFrontmatter {
       return SaiaSkillFrontmatter(body: texto.trim());
     }
 
+    const maxFields = 64;
     final campos = <String, String>{};
     String? claveActual;
     var literal = false;
@@ -73,7 +74,16 @@ class SaiaSkillFrontmatter {
       final m = RegExp(r'^([A-Za-z_][\w-]*)\s*:\s*(.*)$').firstMatch(linea);
 
       if (m != null && !indentada) {
-        claveActual = m.group(1)!;
+        final candidata = m.group(1)!;
+        if (candidata == '__proto__' ||
+            candidata == 'constructor' ||
+            candidata == 'prototype' ||
+            (!campos.containsKey(candidata) && campos.length >= maxFields)) {
+          claveActual = null;
+          literal = false;
+          continue;
+        }
+        claveActual = candidata;
         final valor = m.group(2)!.trim();
         if (valor == '>' || valor == '>-' || valor == '|' || valor == '|-') {
           literal = valor.startsWith('|');

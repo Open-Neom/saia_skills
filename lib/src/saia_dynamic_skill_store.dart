@@ -45,18 +45,25 @@ class SaiaDynamicSkill {
 
   /// Renders the complete `SKILL.md` with YAML frontmatter + body.
   String toSkillMarkdown() {
+    final safeId = id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final safeCategory = category.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final buf = StringBuffer()
       ..writeln('---')
-      ..writeln('name: $id')
-      ..writeln('category: $category')
+      ..writeln('name: $safeId')
+      ..writeln('category: ${safeCategory.isEmpty ? "custom" : safeCategory}')
       ..writeln('description: ${_escapeYaml(description)}');
     if (triggers.isNotEmpty) {
       buf.writeln('triggers: [${triggers.map(_escapeYaml).join(', ')}]');
     }
+    final trimmedBody = markdownBody.trim();
+    final safeBody = trimmedBody.startsWith('---')
+        ? '\u200B$trimmedBody'
+            .replaceFirst('\u200B---', r'\---')
+        : trimmedBody;
     buf
       ..writeln('---')
       ..writeln()
-      ..write(markdownBody.trim())
+      ..write(safeBody)
       ..writeln();
     return buf.toString();
   }
@@ -74,31 +81,53 @@ class SaiaDynamicSkill {
         'updatedAt': updatedAt.toIso8601String(),
       };
 
-  factory SaiaDynamicSkill.fromJson(Map<String, dynamic> json) {
+  factory SaiaDynamicSkill.fromJson(Map<Object?, Object?> json) {
     final now = DateTime.now();
+    final rawTriggers = json['triggers'];
     return SaiaDynamicSkill(
-      id: json['id'] as String? ?? '',
-      category: json['category'] as String? ?? 'custom',
-      language: json['language'] as String? ?? 'es',
-      displayName: json['displayName'] as String? ?? '',
-      tagline: json['tagline'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      triggers: (json['triggers'] as List?)
-              ?.map((e) => e.toString())
-              .toList(growable: false) ??
-          const [],
-      markdownBody: json['markdownBody'] as String? ?? '',
-      createdAt:
-          DateTime.tryParse(json['createdAt'] as String? ?? '') ?? now,
-      updatedAt:
-          DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? now,
+      id: (json['id']?.toString() ?? '').trim().toLowerCase().replaceAll(
+            '-',
+            '_',
+          ),
+      category: (json['category']?.toString() ?? 'custom').trim().toLowerCase(),
+      language: (json['language']?.toString() ?? 'es').trim(),
+      displayName: (json['displayName']?.toString() ?? '').trim(),
+      tagline: (json['tagline']?.toString() ?? '').trim(),
+      description: (json['description']?.toString() ?? '').trim(),
+      triggers: rawTriggers is Iterable
+          ? rawTriggers.map((e) => e.toString()).toList(growable: false)
+          : const [],
+      markdownBody: json['markdownBody']?.toString() ?? '',
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? now,
+      updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ?? now,
     );
   }
 
+  static final RegExp _yamlSpecialChars = RegExp(
+    r'[:#"\x27\[\]{},&*!|>%@`\\]|^[-?~]',
+  );
+  static const Set<String> _yamlReservedScalars = {
+    'true',
+    'false',
+    'null',
+    'yes',
+    'no',
+    'on',
+    'off',
+  };
+
   static String _escapeYaml(String value) {
-    final clean = value.replaceAll('\n', ' ').trim();
-    if (clean.contains(':') || clean.contains('"') || clean.contains('#')) {
-      return '"${clean.replaceAll('"', r'\"')}"';
+    final clean = value
+        .replaceAll(
+          RegExp(r'[\x00-\x1F\x7F-\x9F\u202A-\u202E\u2066-\u2069\u061C]'),
+          ' ',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (clean.isEmpty ||
+        _yamlSpecialChars.hasMatch(clean) ||
+        _yamlReservedScalars.contains(clean.toLowerCase())) {
+      return '"${clean.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
     }
     return clean;
   }
@@ -109,31 +138,81 @@ class SaiaDynamicSkill {
 /// Reverse-engineered from `hermes-agent/tools/skills_guard.py` and
 /// `skill_linter.py`.
 class SaiaSkillSecurityGuard {
+  static final RegExp _bidiTrojanChars = RegExp(
+    r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\u0085\u2028-\u202E\u2066-\u2069\u061C]',
+  );
+  static final RegExp _invisibleZeroWidthChars = RegExp(
+    r'[\u200B-\u200F\u2060-\u2064\uFEFF\u00AD]',
+  );
+
   static final List<({RegExp pattern, String reason})> _blockedPatterns = [
     (
-      pattern: RegExp(r'\brm\s+-[rf]{1,2}\s+/(?:\s|$|\*)', caseSensitive: false),
-      reason: 'Comando destructivo de sistema de archivos detectado (rm -rf /).',
+      pattern: RegExp(
+        r'\brm\s+-[rf]{1,2}\s+/(?![A-Za-z0-9._-])',
+        caseSensitive: false,
+      ),
+      reason:
+          'Comando destructivo de sistema de archivos detectado (rm -rf /).',
     ),
     (
       pattern: RegExp(
-        r'\b(curl|wget)\b[^\n|]*\|\s*(ba)?sh\b',
+        r'\b(curl|wget)\b[^\n|]*\|\s*(ba|z)?sh\b',
         caseSensitive: false,
       ),
       reason: 'Ejecución remota por tubería (curl/wget | sh) bloqueada.',
     ),
     (
       pattern: RegExp(
-        r'ignore\s+(all\s+)?(previous|prior)\s+instructions|disregard\s+system\s+prompt',
+        r'(/dev/tcp/|nc\s+-e\s+/bin/|socat\b[^\n]*exec:)',
         caseSensitive: false,
       ),
-      reason: 'Intento de inyección de prompt detectado en el cuerpo de la skill.',
+      reason: 'Patrón de reverse shell detectado en el cuerpo de la skill.',
+    ),
+    (
+      pattern: RegExp(
+        r'(\.ssh/id_(?:rsa|ed25519|ecdsa|dsa)|\.aws/credentials|\.gnupg/|\.kube/config|kubeconfig|'
+        r'terraform\.tfstate|\.tfvars\b|\.vault-token|\.pgpass|\.my\.cnf|key4\.db|logins\.json|'
+        r'\.config/gcloud|\.docker/config\.json|application_default_credentials\.json|keychains/|'
+        r'\.secret\.local|\.git-credentials|\.netrc|\.npmrc|\.pypirc|\.kdbx\b|'
+        r'(?:^|[\s/\\"\x27])\.env(?:\.[a-z0-9_]+)?(?:\s|$|["\x27])|'
+        r'(?:/private)?/etc/(?:shadow|passwd|sudoers))',
+        caseSensitive: false,
+      ),
+      reason: 'Acceso a llaves o credenciales locales bloqueado en la skill.',
+    ),
+    (
+      pattern: RegExp(
+        r'(<\s*/?\s*(?:think|thinking|thought|memory_recall|auto_memory|system_context)\b|'
+        r'<\s*/\s*content\s*>|'
+        r'<\|(?:channel|turn)\s*>\s*thought\b|<(?:channel|turn)\|>|<\|tool_call\s*>|<tool_call\|>|'
+        r'<\|/?(?:turn|eot_id|im_start|im_end|tool_call)\|?>|<end_of_turn>|'
+        r'\[\s*/?\s*(?:BIOCHIP|MEMORY_RECALL|AUTO_MEMORY|SYSTEM_CONTEXT)\b)',
+        caseSensitive: false,
+      ),
+      reason:
+          'Etiquetas internas reservadas del motor cognitivo bloqueadas en la skill.',
+    ),
+    (
+      pattern: RegExp(
+        r'ignore\s+(all\s+)?(previous|prior)\s+instructions|'
+        r'disregard\s+system\s+prompt|'
+        r'ignora\s+(todas\s+)?las\s+instrucciones\s+(anteriores|previas)|'
+        r'olvida(te)?\s+(de\s+)?que\s+eres\s+itzli',
+        caseSensitive: false,
+      ),
+      reason:
+          'Intento de inyección de prompt detectado en el cuerpo de la skill.',
     ),
   ];
 
   /// Returns an error string if the skill content violates safety rules, or `null` if safe.
   static String? scan(String content) {
+    if (_bidiTrojanChars.hasMatch(content)) {
+      return 'Guardia de Seguridad Itzli bloqueó la habilidad: Caracteres Unicode bidireccionales o de control (Trojan Source) bloqueados.';
+    }
+    final normalized = content.replaceAll(_invisibleZeroWidthChars, '');
     for (final rule in _blockedPatterns) {
-      if (rule.pattern.hasMatch(content)) {
+      if (rule.pattern.hasMatch(normalized)) {
         return 'Guardia de Seguridad Itzli bloqueó la habilidad: ${rule.reason}';
       }
     }
@@ -149,31 +228,93 @@ class SaiaDynamicSkillStore {
   static const int maxIdLength = 64;
   static const int maxDescriptionLength = 1024;
   static const int maxContentChars = 100000;
+  static const int maxDynamicSkills = 250;
+  static const int maxTriggers = 32;
+  static const int maxTriggerChars = 128;
   static final RegExp _validIdRegex = RegExp(r'^[a-z0-9][a-z0-9_-]*$');
 
   final Map<String, SaiaDynamicSkill> _skills = {};
+
+  static List<String> _sanitizeTriggers(Iterable<String> raw) {
+    final cleaned = <String>[];
+    for (final entry in raw) {
+      if (cleaned.length >= maxTriggers) break;
+      final t = entry.trim();
+      if (t.isEmpty || t.length > maxTriggerChars) continue;
+      if (SaiaSkillSecurityGuard.scan(t) != null) continue;
+      if (!cleaned.contains(t)) cleaned.add(t);
+    }
+    return List.unmodifiable(cleaned);
+  }
+
+  static String _truncateUtf16Safe(
+    String value,
+    int maxChars, {
+    String suffix = '',
+  }) {
+    if (!maxChars.isFinite || maxChars <= 0 || value.isEmpty) return '';
+    if (value.length <= maxChars) return value;
+    var end = maxChars;
+    final prev = value.codeUnitAt(end - 1);
+    if (prev >= 0xD800 && prev <= 0xDBFF) end -= 1;
+    if (end <= 0) return '';
+    return '${value.substring(0, end)}$suffix';
+  }
+
+  static DateTime _clampTimestamp(DateTime dt, DateTime now) {
+    final maxFuture = now.add(const Duration(minutes: 5));
+    return dt.isAfter(maxFuture) ? maxFuture : dt;
+  }
 
   /// Optional persistence hook invoked whenever a dynamic skill is created,
   /// modified, or deleted.
   Future<void> Function(List<Map<String, dynamic>> serialized)? onPersist;
 
-  List<SaiaDynamicSkill> get all =>
-      _skills.values.toList(growable: false)
-        ..sort((a, b) => a.id.compareTo(b.id));
+  List<SaiaDynamicSkill> get all => _skills.values.toList(growable: false)
+    ..sort((a, b) => a.id.compareTo(b.id));
 
-  SaiaDynamicSkill? getById(String id) => _skills[id.trim().toLowerCase()];
+  SaiaDynamicSkill? getById(String id) =>
+      _skills[id.trim().toLowerCase().replaceAll('-', '_')];
 
   List<SaiaSkillDescriptor> descriptors() =>
       all.map((s) => s.toDescriptor()).toList(growable: false);
 
-  /// Restores persisted dynamic skills from JSON list.
+  /// Restores persisted dynamic skills from JSON/Hive list (supports untyped
+  /// `Map<Object?, Object?>` from Hive and re-validates ID + security rules).
   void hydrateFromJsonList(List<dynamic> rawList) {
     _skills.clear();
+    final now = DateTime.now();
     for (final item in rawList) {
-      if (item is Map<String, dynamic>) {
-        final skill = SaiaDynamicSkill.fromJson(item);
-        if (skill.id.isNotEmpty) {
-          _skills[skill.id] = skill;
+      if (_skills.length >= maxDynamicSkills) break;
+      if (item is Map) {
+        final rawSkill = SaiaDynamicSkill.fromJson(item);
+        final safeTriggers = _sanitizeTriggers(rawSkill.triggers);
+        if (rawSkill.id.isNotEmpty &&
+            rawSkill.id.length <= maxIdLength &&
+            rawSkill.id != 'constructor' &&
+            rawSkill.id != 'prototype' &&
+            _validIdRegex.hasMatch(rawSkill.id) &&
+            rawSkill.description.isNotEmpty &&
+            rawSkill.description.length <= maxDescriptionLength &&
+            rawSkill.tagline.length <= maxDescriptionLength &&
+            rawSkill.markdownBody.trim().isNotEmpty &&
+            rawSkill.markdownBody.length <= maxContentChars &&
+            SaiaSkillSecurityGuard.scan(
+                  '${rawSkill.displayName}\n${rawSkill.tagline}\n${rawSkill.description}\n${rawSkill.markdownBody}',
+                ) ==
+                null) {
+          _skills[rawSkill.id] = SaiaDynamicSkill(
+            id: rawSkill.id,
+            category: rawSkill.category,
+            language: rawSkill.language,
+            displayName: _truncateUtf16Safe(rawSkill.displayName, 128),
+            tagline: _truncateUtf16Safe(rawSkill.tagline, 96),
+            description: rawSkill.description,
+            triggers: safeTriggers,
+            markdownBody: rawSkill.markdownBody,
+            createdAt: _clampTimestamp(rawSkill.createdAt, now),
+            updatedAt: _clampTimestamp(rawSkill.updatedAt, now),
+          );
         }
       }
     }
@@ -204,6 +345,18 @@ class SaiaDynamicSkillStore {
     if (validationError != null) {
       return {'success': false, 'error': validationError};
     }
+    if (displayName != null) {
+      final dnErr = SaiaSkillSecurityGuard.scan(displayName);
+      if (dnErr != null) {
+        return {'success': false, 'error': dnErr};
+      }
+    }
+    for (final t in triggers) {
+      final tErr = SaiaSkillSecurityGuard.scan(t);
+      if (tErr != null) {
+        return {'success': false, 'error': tErr};
+      }
+    }
 
     if (_skills.containsKey(normalizedId)) {
       return {
@@ -212,11 +365,19 @@ class SaiaDynamicSkillStore {
             'Ya existe una habilidad personalizada con id "$normalizedId". Usa action="edit" o action="patch".',
       };
     }
+    if (_skills.length >= maxDynamicSkills) {
+      return {
+        'success': false,
+        'error':
+            'Se alcanzó el límite máximo de $maxDynamicSkills habilidades personalizadas.',
+      };
+    }
 
     final parsedBody = SaiaSkillFrontmatter.parse(content).body.trim();
     final bodyToSave = parsedBody.isNotEmpty ? parsedBody : content.trim();
     final now = DateTime.now();
 
+    final trimmedDesc = description.trim();
     final skill = SaiaDynamicSkill(
       id: normalizedId,
       category: normalizedCategory.isEmpty ? 'custom' : normalizedCategory,
@@ -224,11 +385,11 @@ class SaiaDynamicSkillStore {
       displayName: displayName?.trim().isNotEmpty == true
           ? displayName!.trim()
           : _humanizeId(normalizedId),
-      tagline: description.length > 96
-          ? '${description.substring(0, 93)}...'
-          : description.trim(),
-      description: description.trim(),
-      triggers: triggers,
+      tagline: trimmedDesc.length > 96
+          ? _truncateUtf16Safe(trimmedDesc, 93, suffix: '...')
+          : trimmedDesc,
+      description: trimmedDesc,
+      triggers: _sanitizeTriggers(triggers),
       markdownBody: bodyToSave,
       createdAt: now,
       updatedAt: now,
@@ -282,6 +443,15 @@ class SaiaDynamicSkillStore {
       return {'success': false, 'error': validationError};
     }
 
+    if (triggers != null) {
+      for (final t in triggers) {
+        final tErr = SaiaSkillSecurityGuard.scan(t);
+        if (tErr != null) {
+          return {'success': false, 'error': tErr};
+        }
+      }
+    }
+
     final parsedBody = SaiaSkillFrontmatter.parse(content).body.trim();
     final bodyToSave = parsedBody.isNotEmpty ? parsedBody : content.trim();
 
@@ -291,10 +461,11 @@ class SaiaDynamicSkillStore {
       language: existing.language,
       displayName: existing.displayName,
       tagline: nextDesc.length > 96
-          ? '${nextDesc.substring(0, 93)}...'
+          ? _truncateUtf16Safe(nextDesc, 93, suffix: '...')
           : nextDesc,
       description: nextDesc,
-      triggers: triggers ?? existing.triggers,
+      triggers:
+          triggers != null ? _sanitizeTriggers(triggers) : existing.triggers,
       markdownBody: bodyToSave,
       createdAt: existing.createdAt,
       updatedAt: DateTime.now(),
@@ -330,7 +501,8 @@ class SaiaDynamicSkillStore {
     if (oldString.isEmpty) {
       return {
         'success': false,
-        'error': 'El parámetro old_string no puede estar vacío para action="patch".',
+        'error':
+            'El parámetro old_string no puede estar vacío para action="patch".',
       };
     }
 
@@ -340,7 +512,9 @@ class SaiaDynamicSkillStore {
         'success': false,
         'error':
             'No se encontró old_string dentro de la habilidad "$normalizedId".',
-        'preview': body.length > 400 ? '${body.substring(0, 400)}...' : body,
+        'preview': body.length > 400
+            ? _truncateUtf16Safe(body, 400, suffix: '...')
+            : body,
       };
     }
 
@@ -348,7 +522,9 @@ class SaiaDynamicSkillStore {
         ? body.replaceAll(oldString, newString)
         : body.replaceFirst(oldString, newString);
 
-    final securityError = SaiaSkillSecurityGuard.scan(newBody);
+    final securityError = SaiaSkillSecurityGuard.scan(
+      '${existing.description}\n$newBody',
+    );
     if (securityError != null) {
       return {'success': false, 'error': securityError};
     }
@@ -406,11 +582,18 @@ class SaiaDynamicSkillStore {
     required String description,
     required String content,
   }) {
-    if (id.isEmpty || id.length > maxIdLength || !_validIdRegex.hasMatch(id)) {
+    if (id.isEmpty ||
+        id.length > maxIdLength ||
+        id == 'constructor' ||
+        id == 'prototype' ||
+        !_validIdRegex.hasMatch(id)) {
       return 'Identificador de skill inválido "$id". Usa snake_case alfanumérico (máx $maxIdLength caracteres).';
     }
     if (category.isNotEmpty &&
-        (category.length > 32 || !_validIdRegex.hasMatch(category))) {
+        (category.length > 32 ||
+            category == 'constructor' ||
+            category == 'prototype' ||
+            !_validIdRegex.hasMatch(category))) {
       return 'Categoría inválida "$category". Usa minúsculas, números o guion bajo.';
     }
     if (description.trim().isEmpty) {

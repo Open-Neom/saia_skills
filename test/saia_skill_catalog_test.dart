@@ -233,5 +233,71 @@ void main() {
       expect(composed, isNotEmpty);
       expect(composed, contains('## Habilidad:'));
     });
+
+    test('decodeSkill y search resuelven habilidades dinámicas y quitan frontmatter YAML',
+        () async {
+      addTearDown(() {
+        SaiaDynamicSkillStore.instance.hydrateFromJsonList(const []);
+      });
+
+      final created = await SaiaDynamicSkillStore.instance.createSkill(
+        id: 'ruta_dinamica_p2',
+        category: 'custom',
+        description: 'Flujo procedimental sintetizado',
+        triggers: const ['sintetizar flujo p2'],
+        content: '---\nname: ruta_dinamica_p2\ndescription: Meta YAML\n---\n'
+            '# Objetivo\nAplicar validación incremental.',
+      );
+      expect(created['success'], isTrue);
+
+      final foundById = await SaiaSkillCatalog.search('ruta dinamica p2');
+      expect(foundById.map((s) => s.id), contains('ruta_dinamica_p2'));
+
+      final foundByTrigger =
+          await SaiaSkillCatalog.search('sintetizar flujo p2');
+      expect(foundByTrigger.map((s) => s.id), contains('ruta_dinamica_p2'));
+
+      final dynSkill =
+          foundById.firstWhere((s) => s.id == 'ruta_dinamica_p2');
+      final body = await dynSkill.loadBody();
+      expect(body, isNot(contains('name: ruta_dinamica_p2')));
+      expect(body, contains('# Objetivo'));
+
+      final decodedDyn = await SaiaSkillCatalog.decodeSkill(
+        'ruta_dinamica_p2',
+        targetLanguage: SaiaLanguage.german,
+      );
+      expect(decodedDyn, isNot(contains('description: Meta YAML')));
+      expect(decodedDyn, contains('# Ziel'));
+
+      // También verifica que decodeSkill sobre habilidades estáticas con frontmatter lo elimine
+      final staticSkills = await SaiaSkillCatalog.all();
+      SaiaSkill? withFrontmatter;
+      for (final s in staticSkills.take(40)) {
+        final fm = await s.frontmatter();
+        if (!fm.isEmpty) {
+          withFrontmatter = s;
+          break;
+        }
+      }
+      if (withFrontmatter != null) {
+        final decodedStatic =
+            await SaiaSkillCatalog.decodeSkill(withFrontmatter.id);
+        expect(decodedStatic.trimLeft().startsWith('---'), isFalse);
+      }
+    });
+
+    test('descriptors(includeFrontmatter: true) carga en paralelo manteniendo orden',
+        () async {
+      final cats = await SaiaSkillCatalog.categories();
+      final cat = cats.first;
+      final expectedOrder =
+          (await SaiaSkillCatalog.forCategory(cat)).map((s) => s.id).toList();
+      final descs = await SaiaSkillCatalog.descriptors(
+        category: cat,
+        includeFrontmatter: true,
+      );
+      expect(descs.map((d) => d.id).toList(), expectedOrder);
+    });
   });
 }
