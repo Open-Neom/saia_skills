@@ -1,14 +1,17 @@
 # PPTX Presentation Creation & Editing
 
-Create, edit, and analyze PowerPoint presentations using HTML-to-PPTX workflows and OOXML manipulation.
+Create native, editable 16:9 PowerPoint (`.pptx`) decks directly with Itzli's `generate_pptx` tool across Desktop, Mobile, and Web.
 
-- Reading content: use `markitdown` for text extraction, unpack to XML for comments, notes, layouts, and animations
-- Creating without template: use html2pptx workflow (HTML slides converted to PPTX with accurate positioning)
-- Design principles: choose colors matching subject matter, use web-safe fonts only, ensure strong contrast and readability
-- Build color palettes of 3-5 colors (dominant + supporting + accent) that reflect the topic and audience
-- Layout rules: prefer two-column or full-slide layouts for charts/tables; never vertically stack content below text
-- Editing existing: unpack OOXML, edit XML directly, validate after each edit, repack
-- Template-based creation: extract text, create visual thumbnail grid, analyze inventory, map content to template slides
-- Use rearrange.py to duplicate/reorder template slides, inventory.py to extract shapes, replace.py to apply new content
-- Visual validation: generate thumbnail grids to catch text cutoff, overlap, positioning, and contrast issues
-- Key OOXML paths: ppt/slides/slideN.xml (content), ppt/notesSlides/ (notes), ppt/theme/ (styling)
+- Primary workflow: call `generate_pptx` with a structured `slides` array (max 30 slides) and a visual `theme` (`executive`, `obsidiana`, `cuarzo`, `ambar`, `amatista`, `turquesa`, or `jade`).
+- Available layouts (distilled from Presenton Template V2 `1280x720` canvas):
+  - `cover` — title, subtitle, eyebrow badge
+  - `bullets` — 2–6 concise points rendered as structured cards (<= 25 words per bullet)
+  - `two_columns` — `left_title` / `left_items` vs `right_title` / `right_items` for comparisons
+  - `kpis` — 2–4 `metrics` (`{value, label, detail}`) + optional takeaway bullets
+  - `table` — native editable OOXML table (`table_headers`, `table_rows`)
+  - `timeline` — 3–5 horizontal roadmap `steps` (`{title, detail}`)
+  - `quote` — centered editorial pull-quote (`title` + `author`)
+  - `closing` — final summary / call-to-action
+- Always include concise speaker `notes` where helpful for presenters.
+- Vary layouts across consecutive slides (avoid walls of text or repeating `bullets` on every slide).
+- Reading existing `.pptx` files on Desktop: use `read_file` (Itzli extracts slide text natively from OOXML).
