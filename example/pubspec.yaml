@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  sint: ^2.2.0
+  sint: ^2.3.0
   saia_skills:
     path: ../
 
